@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEG Transformer Attention Visualizer</title>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-light: #60a5fa;
+            --primary-dark: #2563eb;
+            --secondary: #f97316;
+            --secondary-light: #fb923c;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-700: #374151;
+            --gray-900: #111827;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: var(--gray-900);
+            background-color: var(--gray-50);
+        }
+        
+        h1, h2, h3 {
+            color: var(--gray-900);
+            margin-bottom: 0.75em;
+        }
+        
+        h1 {
+            font-size: 1.75rem;
+            padding-bottom: 0.5em;
+            border-bottom: 1px solid var(--gray-200);
+        }
+        
+        h2 {
+            font-size: 1.25rem;
+            margin-top: 0.5em;
+        }
+        
+        .section {
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .control-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .control-group {
+            margin-bottom: 0.75rem;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.375rem;
+            font-size: 0.875rem;
+            color: var(--gray-700);
+        }
+        
+        select, button {
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.25rem;
+            border: 1px solid var(--gray-300);
+            font-size: 0.875rem;
+            background-color: white;
+        }
+        
+        select {
+            min-width: 200px;
+        }
+        
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: var(--primary-dark);
+        }
+        
+        button:disabled {
+            background-color: var(--gray-400);
+            cursor: not-allowed;
+        }
+        
+        .nav-buttons {
+            display: flex;
+            align-items: center;
+        }
+        
+        .position-display {
+            padding: 0.5rem 1rem;
+            background-color: var(--gray-100);
+            border: 1px solid var(--gray-300);
+            border-radius: 0.25rem;
+            min-width: 80px;
+            text-align: center;
+            margin: 0 0.5rem;
+        }
+        
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0.25rem;
+        }
+        
+        .current-word {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.25rem;
+            background-color: white;
+            min-width: 150px;
+            font-weight: 600;
+            color: var(--primary-dark);
+        }
+        
+        .heatmap-container {
+            overflow-x: auto;
+            margin-bottom: 1.25rem;
+        }
+        
+        table.heatmap {
+            border-collapse: collapse;
+            font-size: 0.75rem;
+        }
+        
+        table.heatmap th, table.heatmap td {
+            border: 1px solid var(--gray-200);
+            padding: 0.5rem;
+            text-align: center;
+        }
+        
+        table.heatmap th {
+            background-color: var(--gray-100);
+            font-weight: 600;
+        }
+        
+        .attention-0 { background-color: #f5f5f5; }
+        .attention-1 { background-color: #ffe9cc; }
+        .attention-2 { background-color: #ffd699; }
+        .attention-3 { background-color: #ffc266; }
+        .attention-4 { background-color: #ffad33; }
+        .attention-5 { background-color: #ff9900; }
+        
+        .context-words {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.375rem;
+            margin-bottom: 1.25rem;
+        }
+        
+        .word-token {
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.25rem;
+            background-color: var(--gray-100);
+            font-size: 0.875rem;
+            position: relative;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .word-token:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            z-index: 1;
+        }
+        
+        .word-token.padding {
+            background-color: var(--gray-200);
+            color: var(--gray-500);
+        }
+        
+        .word-token.current {
+            border: 2px solid var(--primary);
+            background-color: #dbeafe;
+        }
+        
+        .word-token .index {
+            font-size: 0.625rem;
+            text-align: center;
+            margin-top: 0.25rem;
+            color: var(--gray-500);
+        }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            font-size: 1.125rem;
+        }
+        
+        .loading::after {
+            content: "";
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 3px solid var(--gray-300);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            margin-left: 0.75rem;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background-color: #fee2e2;
+            border: 1px solid #fca5a5;
+            color: #b91c1c;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            margin-bottom: 1.25rem;
+        }
+        
+        canvas#attentionCurve {
+            background-color: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 0.25rem;
+            width: 100%;
+            height: 300px;
+            display: block;
+        }
+        
+        .axis-labels-container {
+            position: relative;
+            height: 80px;
+            margin-top: 0.375rem;
+            margin-left: 0;
+        }
+        
+        .x-axis-label {
+            position: absolute;
+            transform: rotate(-45deg);
+            transform-origin: top left;
+            white-space: nowrap;
+            font-size: 0.75rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--gray-700);
+        }
+        
+        .legend {
+            background-color: var(--gray-100);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            margin-top: 1.25rem;
+        }
+        
+        .legend h3 {
+            margin-bottom: 0.5rem;
+            color: var(--gray-700);
+        }
+        
+        .legend ul {
+            padding-left: 1.25rem;
+            margin: 0.625rem 0;
+        }
+        
+        .legend li {
+            margin-bottom: 0.375rem;
+        }
+        
+        .word-col-header {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            text-align: left;
+            max-height: 80px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0.5rem 0;
+            font-size: 0.75rem;
+        }
+        
+        .info-text {
+            font-size: 0.875rem;
+            color: var(--gray-500);
+            margin-bottom: 0.75rem;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+        }
+        
+        .slider-value {
+            min-width: 3rem;
+            text-align: center;
+            margin-left: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--gray-700);
+            background: var(--gray-100);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            margin: 0;
+        }
+        
+        @media (max-width: 768px) {
+            .control-row {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            select {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>MEG Transformer Attention Visualizer</h1>
+
+    <div id="loadingMessage" class="loading">Loading visualization data...</div>
+    <div id="errorMessage" class="error" style="display: none;"></div>
+    <div id="mainContent" style="display: none;">
+        <div class="section">
+            <h2>Controls</h2>
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="taskSelect">Task (Story)</label>
+                    <select id="taskSelect"></select>
+                </div>
+                <div class="control-group">
+                    <label for="headSelect">Attention Head</label>
+                    <select id="headSelect">
+                        <option value="avg">Average Across Heads</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="attentionThreshold">Attention Threshold</label>
+                    <div class="slider-container">
+                        <input type="range" id="attentionThreshold" min="0" max="1" step="0.05" value="0.1">
+                        <div id="thresholdValue" class="slider-value">0.10</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Word Navigation Section -->
+        <div class="section">
+            <h2>Word Navigation</h2>
+            <div class="control-row">
+                <div class="control-group">
+                    <label>Word Position</label>
+                    <div class="nav-buttons">
+                        <button id="prevButton" disabled>&lt; Previous</button>
+                        <div id="positionDisplay" class="position-display">1 / 0</div>
+                        <button id="nextButton" disabled>Next &gt;</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Current Word</label>
+                    <div id="currentWord" class="current-word"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attention Data Warning -->
+        <div id="attentionWarning" class="warning" style="display: none;">
+            <strong>Note:</strong> Limited attention data available for this task. The visualization may show simplified patterns.
+        </div>
+
+
+
+        <!-- Attention Curve Visualization -->
+        <div class="section">
+            <h2>Attention Distribution</h2>
+            <p id="curveDescription" class="info-text">
+                This chart shows how the current word attends to previous words in the context.
+            </p>
+            <canvas id="attentionCurve" width="800" height="200"></canvas>
+            <div id="xAxisLabels" style="display: flex; margin-top: 5px;"></div>
+        </div>
+
+        <!-- Attention Heatmap -->
+        <div class="section">
+            <h2>Attention Heatmap</h2>
+            <p class="info-text">This heatmap shows the full attention matrix between all words in the sequence.</p>
+            <div class="heatmap-container">
+                <div id="heatmapZoom" style="transform-origin: top left;">
+                    <table id="heatmap" class="heatmap">
+                        <thead>
+                            <tr>
+                                <th>Target ↓ / Source →</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <h3>Legend</h3>
+            <ul>
+                <li>In the attention matrix, darker orange colors indicate stronger attention weights</li>
+                <li>The attention is causal, meaning words can only attend to previous words or themselves</li>
+                <li>The bar chart shows how the current word attends to all previous words in the sequence</li>
+                <li>Hover over elements to see more details</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // State variables
+        let data = null;
+        let availableFolds = [];
+        let currentFold = null;
+        let currentTaskId = 0;
+        let currentSampleIndex = 0;
+        let currentSample = null;
+        let currentHead = 'avg';
+        let attentionThreshold = 0.1;
+        let taskToFoldMapping = {}; // Maps task IDs to fold names
+
+        // DOM elements
+        const loadingMessage = document.getElementById('loadingMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const mainContent = document.getElementById('mainContent');
+        const taskSelect = document.getElementById('taskSelect');
+        const headSelect = document.getElementById('headSelect');
+        const prevButton = document.getElementById('prevButton');
+        const nextButton = document.getElementById('nextButton');
+        const positionDisplay = document.getElementById('positionDisplay');
+        const currentWordElement = document.getElementById('currentWord');
+        const attentionWarning = document.getElementById('attentionWarning');
+        const attentionThresholdSlider = document.getElementById('attentionThreshold');
+        const thresholdValueDisplay = document.getElementById('thresholdValue');
+        const zoomLevelSlider = document.getElementById('zoomLevel');
+        const zoomValueDisplay = document.getElementById('zoomValue');
+        const attentionCurve = document.getElementById('attentionCurve');
+        const xAxisLabels = document.getElementById('xAxisLabels');
+        const heatmap = document.getElementById('heatmap');
+        const heatmapZoom = document.getElementById('heatmapZoom');
+        const contextWords = document.getElementById('contextWords');
+        const curveDescription = document.getElementById('curveDescription');
+
+        // Initialize the application
+        async function init() {
+            try {
+                await loadAvailableData();
+                setupUI();
+                updateVisualization();
+                hideLoading();
+            } catch (error) {
+                showError("Failed to load visualization data: " + error.message);
+            }
+            
+            // Add resize listener for canvas resizing
+            window.addEventListener('resize', function() {
+                if (currentSample) {
+                    updateAttentionCurve();
+                }
+            });
+        }
+
+        // Load available data files
+        async function loadAvailableData() {
+            try {
+                showLoading();
+                
+                // Try to load the index file first
+                try {
+                    const response = await fetch('visualization_data/attention_data_index.json');
+                    if (response.ok) {
+                        const indexData = await response.json();
+                        if (indexData.folds && indexData.folds.length > 0) {
+                            availableFolds = indexData.folds;
+                            currentFold = indexData.folds[0];
+                        } else {
+                            throw new Error("No folds found in index file");
+                        }
+                    } else {
+                        throw new Error("Index file not found");
+                    }
+                } catch (indexError) {
+                    // If index file not found, try finding fold files directly
+                    const folderResponse = await fetch('visualization_data/fold_0_attention.json');
+                    if (folderResponse.ok) {
+                        availableFolds = ['fold_0', 'fold_1', 'fold_2', 'fold_3'];
+                        currentFold = 'fold_0';
+                    } else {
+                        throw new Error("No visualization data files found");
+                    }
+                }
+                
+                // Create a mapping from task ID to fold name
+                // This is crucial for switching folds when changing tasks
+                for (let i = 0; i < 4; i++) {
+                    // For each task, map it to the corresponding fold
+                    // Assuming task i corresponds to fold_i
+                    const foldName = `fold_${i}`;
+                    if (availableFolds.includes(foldName)) {
+                        taskToFoldMapping[i] = foldName;
+                    }
+                }
+                console.log("Task to fold mapping:", taskToFoldMapping);
+                
+                // Load data for the first fold
+                await loadFoldData(currentFold);
+                
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        // Load data for the selected fold
+        async function loadFoldData(fold) {
+            try {
+                showLoading();
+                const filePath = `visualization_data/${fold}_attention.json`;
+                
+                const response = await fetch(filePath);
+                if (!response.ok) {
+                    throw new Error(`Could not load data for ${fold}: ${response.statusText}`);
+                }
+                
+                data = await response.json();
+                currentFold = fold;
+                
+                // After loading a new fold, make sure our task ID is valid for this fold
+                if (data.tasks && data.tasks.length > 0) {
+                    // Try to find the task ID that matches this fold's test task
+                    if (data.testTaskId !== undefined) {
+                        currentTaskId = data.testTaskId;
+                    } else {
+                        // Default to first task in this fold
+                        currentTaskId = data.tasks[0].id;
+                    }
+                    currentSampleIndex = 0;
+                }
+                
+                hideLoading();
+                return data;
+            } catch (error) {
+                showError(`Error loading fold data: ${error.message}`);
+                throw error;
+            }
+        }
+
+        // Set up UI controls
+        function setupUI() {
+            taskSelect.innerHTML = '';
+            headSelect.innerHTML = '<option value="avg">Average Across Heads</option>';
+            
+            // Populate head selector
+            if (data && data.numHeads) {
+                for (let i = 0; i < data.numHeads; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = `Head ${i + 1}`;
+                    headSelect.appendChild(option);
+                }
+            }
+            
+            // Populate task selector
+            populateTaskSelector();
+            
+            // Set up event listeners
+            taskSelect.addEventListener('change', handleTaskChange);
+            headSelect.addEventListener('change', handleHeadChange);
+            prevButton.addEventListener('click', handlePrevSample);
+            nextButton.addEventListener('click', handleNextSample);
+            attentionThresholdSlider.addEventListener('input', handleThresholdChange);
+            
+            // Initialize slider displays
+            thresholdValueDisplay.textContent = attentionThreshold.toFixed(2);
+        }
+
+        // Populate the task selector
+        function populateTaskSelector() {
+            taskSelect.innerHTML = '';
+            
+            if (!data || !data.tasks) return;
+            
+            data.tasks.forEach(task => {
+                const option = document.createElement('option');
+                option.value = task.id;
+                option.textContent = `${task.name} (${task.wordCount} words)`;
+                taskSelect.appendChild(option);
+            });
+            
+            const taskExists = Array.from(taskSelect.options).some(option => Number(option.value) === currentTaskId);
+            
+            if (taskExists) {
+                taskSelect.value = currentTaskId;
+            } else if (taskSelect.options.length > 0) {
+                currentTaskId = Number(taskSelect.options[0].value);
+                taskSelect.value = currentTaskId;
+            }
+        }
+
+        // Update visualization based on current state
+        function updateVisualization() {
+            updateCurrentSample();
+            updateNavigationControls();
+            updateAttentionWarning();
+            updateContextWords(); // Re-added this to ensure labels are updated
+            updateAttentionCurve();
+            updateAttentionHeatmap();
+        }
+
+        // Update the current sample based on task and sample index
+        function updateCurrentSample() {
+            if (!data || !data.tasks) return;
+            
+            const samplesForTask = data.sampleContextsByTask?.[currentTaskId] || [];
+            
+            if (currentSampleIndex >= samplesForTask.length) {
+                currentSampleIndex = Math.max(0, samplesForTask.length - 1);
+            }
+            
+            if (samplesForTask.length > 0) {
+                const sampleData = samplesForTask[currentSampleIndex];
+                currentSample = {
+                    ...sampleData,
+                    word: data.words[sampleData.globalIndex] || "unknown"
+                };
+                
+                currentWordElement.textContent = currentSample.word;
+                
+                curveDescription.textContent = `This chart shows how the current word "${currentSample.word}" attends to previous words in the context.`;
+                
+                if (!hasAttentionData()) {
+                    curveDescription.innerHTML += ' <span style="color: #b91c1c">(Limited attention data available)</span>';
+                }
+            }
+        }
+
+        // Update navigation controls
+        function updateNavigationControls() {
+            if (!data || !data.tasks || currentTaskId === undefined) return;
+            
+            const samplesForTask = data.sampleContextsByTask?.[currentTaskId] || [];
+            
+            positionDisplay.textContent = `${currentSampleIndex + 1} / ${samplesForTask.length}`;
+            
+            prevButton.disabled = currentSampleIndex <= 0;
+            nextButton.disabled = currentSampleIndex >= samplesForTask.length - 1;
+        }
+
+        // Display warning if attention data is limited
+        function updateAttentionWarning() {
+            attentionWarning.style.display = hasAttentionData() ? 'none' : 'block';
+        }
+
+        // Get current attention weights based on selected head
+        function getCurrentAttentionWeights() {
+            if (!data || !currentSample || currentSample.taskId === undefined) return null;
+            
+            const taskId = currentSample.taskId;
+            const wordIdxInTask = currentSampleIndex;
+            
+            let sampleWeights = data.attentionWeightsByTask?.[taskId]?.[wordIdxInTask];
+            
+            if (!sampleWeights) {
+                console.warn("No attention weights found for this sample");
+                return null;
+            }
+            
+            if (currentHead === 'avg') {
+                return getAverageAttentionWeights(sampleWeights);
+            } else {
+                const headIdx = parseInt(currentHead);
+                return sampleWeights[headIdx];
+            }
+        }
+
+        // Calculate average attention weights across all heads
+        function getAverageAttentionWeights(sampleWeights) {
+            if (!sampleWeights || !Array.isArray(sampleWeights) || sampleWeights.length === 0) return null;
+            
+            const avgWeights = Array(sampleWeights[0].length).fill().map(() => 
+                Array(sampleWeights[0][0].length).fill(0)
+            );
+            
+            for (let h = 0; h < sampleWeights.length; h++) {
+                for (let i = 0; i < sampleWeights[h].length; i++) {
+                    for (let j = 0; j < sampleWeights[h][i].length; j++) {
+                        avgWeights[i][j] += sampleWeights[h][i][j];
+                    }
+                }
+            }
+            
+            for (let i = 0; i < avgWeights.length; i++) {
+                for (let j = 0; j < avgWeights[i].length; j++) {
+                    avgWeights[i][j] /= sampleWeights.length;
+                }
+            }
+            
+            return avgWeights;
+        }
+
+        // Determine if attention data is available
+        function hasAttentionData() {
+            const attentionWeights = getCurrentAttentionWeights();
+            if (!attentionWeights) return false;
+            
+            let allZero = true;
+            
+            for (let i = 0; i < attentionWeights.length && allZero; i++) {
+                for (let j = 0; j < attentionWeights[i].length && allZero; j++) {
+                    if (attentionWeights[i][j] > 0.001) {
+                        allZero = false;
+                    }
+                }
+            }
+            
+            return !allZero;
+        }
+
+        // Update labels for the attention curve
+        function updateContextWords() {
+            if (!currentSample) {
+                console.warn("No current sample available for axis labels");
+                return;
+            }
+            
+            xAxisLabels.innerHTML = '';
+            xAxisLabels.className = 'axis-labels-container';
+            
+            // Debug log to check words
+            console.log("Current sample words:", currentSample.words);
+            
+            currentSample.words.forEach((word, idx) => {
+                // Create x-axis labels for the attention curve
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'x-axis-label';
+                
+                // Calculate proper positioning
+                const barWidth = 100 / currentSample.words.length;
+                const leftPosition = barWidth * idx + (barWidth / 3);
+                
+                labelDiv.style.left = `${leftPosition}%`;
+                labelDiv.style.top = '25px';
+                labelDiv.textContent = word;
+                
+                xAxisLabels.appendChild(labelDiv);
+            });
+        }
+
+        // Update attention curve visualization with bar plot
+        function updateAttentionCurve() {
+            const attentionWeights = getCurrentAttentionWeights();
+            if (!attentionWeights || attentionWeights.length === 0) {
+                const ctx = attentionCurve.getContext('2d');
+                ctx.clearRect(0, 0, attentionCurve.width, attentionCurve.height);
+                return;
+            }
+            
+            // Get the canvas and set a very high fixed resolution
+            const canvas = attentionCurve;
+            const ctx = canvas.getContext('2d');
+            
+            // Fixed high resolution (3x standard resolution)
+            canvas.width = 2400;  // 800 * 3
+            canvas.height = 900;  // 300 * 3
+            
+            // Maintain the display size using CSS
+            canvas.style.width = '100%';
+            canvas.style.height = '300px';
+            
+            // Scale the drawing operations to match the high resolution
+            const scaleRatio = 3;
+            ctx.scale(scaleRatio, scaleRatio);
+            
+            // Use the display width/height for calculations
+            const width = canvas.width / scaleRatio;
+            const height = canvas.height / scaleRatio;
+            
+            // Clear the canvas
+            ctx.clearRect(0, 0, width, height);
+            
+            const lastRowIndex = attentionWeights.length - 1;
+            if (lastRowIndex < 0) return;
+            
+            const lastRow = attentionWeights[lastRowIndex];
+            if (!lastRow) return;
+            
+            // Draw horizontal grid lines
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.lineWidth = 1;
+            
+            [0.25, 0.5, 0.75].forEach(y => {
+                const yPos = height - (y * height);
+                ctx.beginPath();
+                ctx.moveTo(0, yPos);
+                ctx.lineTo(width, yPos);
+                ctx.stroke();
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.font = '14px system-ui, sans-serif';
+                ctx.fillText(y.toFixed(2), 5, yPos - 3);
+            });
+            
+            const xScale = width / lastRow.length;
+            const barWidth = xScale * 0.8; // Make bars slightly narrower than the available space
+            
+            // Draw bars
+            for (let i = 0; i < lastRow.length; i++) {
+                const weight = lastRow[i];
+                const x = i * xScale + (xScale - barWidth) / 2; // Center the bar in its allocation
+                const barHeight = weight * height;
+                const y = height - barHeight;
+                
+                // Bar fill
+                ctx.fillStyle = 'rgba(249, 115, 22, 0.7)';
+                ctx.fillRect(x, y, barWidth, barHeight);
+                
+                // Bar border
+                ctx.strokeStyle = '#f97316';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, barWidth, barHeight);
+                
+                // Add text label for all bars
+                // Center text horizontally on the bar
+                const labelX = x + (barWidth / 2);
+                const labelY = y - 8;
+                
+                // Text shadow for legibility
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
+                ctx.shadowBlur = 3;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                
+                // Draw text outline
+                ctx.font = 'bold 14px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.lineWidth = 2.5;
+                ctx.strokeStyle = 'white';
+                ctx.strokeText(weight.toFixed(2), labelX, labelY);
+                
+                // Draw text fill
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+                ctx.fillText(weight.toFixed(2), labelX, labelY);
+                
+                // Reset shadow
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                
+                // Reset text baseline to default
+                ctx.textBaseline = 'alphabetic';
+            }
+            
+            // Draw x-axis line
+            ctx.beginPath();
+            ctx.moveTo(0, height);
+            ctx.lineTo(width, height);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.stroke();
+        }
+
+        // Update attention heatmap visualization
+        function updateAttentionHeatmap() {
+            const attentionWeights = getCurrentAttentionWeights();
+            if (!attentionWeights || !currentSample) {
+                heatmap.querySelector('tbody').innerHTML = '';
+                return;
+            }
+            
+            const thead = heatmap.querySelector('thead tr');
+            thead.innerHTML = '<th>Target ↓ / Source →</th>';
+            
+            const tbody = heatmap.querySelector('tbody');
+            tbody.innerHTML = '';
+            
+            // Add column headers with both index and word
+            currentSample.words.forEach((word, idx) => {
+                const th = document.createElement('th');
+                
+                // Create a div for the word
+                const wordDiv = document.createElement('div');
+                wordDiv.className = 'word-col-header';
+                wordDiv.textContent = word;
+                
+                // Create a div for the index
+                const indexDiv = document.createElement('div');
+                indexDiv.textContent = idx;
+                indexDiv.style.textAlign = 'center';
+                
+                // Add both to the header
+                th.appendChild(indexDiv);
+                th.appendChild(wordDiv);
+                
+                thead.appendChild(th);
+            });
+            
+            attentionWeights.forEach((row, rowIdx) => {
+                const tr = document.createElement('tr');
+                
+                const th = document.createElement('th');
+                th.textContent = `${rowIdx}: ${currentSample.words[rowIdx] || ''}`;
+                tr.appendChild(th);
+                
+                row.forEach((weight, colIdx) => {
+                    const td = document.createElement('td');
+                    td.className = getAttentionColorClass(weight);
+                    td.title = `Weight: ${weight.toFixed(3)}, From "${currentSample.words[colIdx] || ''}" to "${currentSample.words[rowIdx] || ''}"`;
+                    td.style.width = '40px';
+                    td.style.height = '40px';
+                    
+                    if (weight > attentionThreshold) {
+                        td.textContent = weight.toFixed(2);
+                    }
+                    
+                    tr.appendChild(td);
+                });
+                
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Get CSS class for an attention weight
+        function getAttentionColorClass(weight) {
+            if (weight < attentionThreshold) return 'attention-0';
+            
+            // Map 0-1 range directly to 1-5 classes
+            const level = Math.floor(weight * 5) + 1;
+            
+            // Ensure the level is between 1 and 5
+            return `attention-${Math.max(1, Math.min(5, level))}`;
+        }
+
+        // Event Handlers
+        function handleTaskChange(e) {
+            const newTaskId = Number(e.target.value);
+            
+            // Get the fold for this task
+            const foldForTask = taskToFoldMapping[newTaskId];
+            
+            if (foldForTask && foldForTask !== currentFold) {
+                // Need to load a different fold for this task
+                loadFoldData(foldForTask)
+                    .then(() => {
+                        // Make sure the task selector shows the correct task after loading
+                        populateTaskSelector();
+                        taskSelect.value = newTaskId;
+                        
+                        // Now update the visualization with the new data
+                        updateVisualization();
+                    })
+                    .catch(error => {
+                        showError(`Error loading data for task: ${error.message}`);
+                    });
+            } else {
+                // Same fold, just update the task
+                currentTaskId = newTaskId;
+                currentSampleIndex = 0;
+                updateVisualization();
+            }
+        }
+
+        function handleHeadChange(e) {
+            currentHead = e.target.value;
+            updateVisualization();
+        }
+
+        function handlePrevSample() {
+            if (currentSampleIndex > 0) {
+                currentSampleIndex--;
+                updateVisualization();
+            }
+        }
+
+        function handleNextSample() {
+            const samplesForTask = data.sampleContextsByTask?.[currentTaskId] || [];
+            if (currentSampleIndex < samplesForTask.length - 1) {
+                currentSampleIndex++;
+                updateVisualization();
+            }
+        }
+
+        function handleThresholdChange(e) {
+            attentionThreshold = parseFloat(e.target.value);
+            thresholdValueDisplay.textContent = attentionThreshold.toFixed(2);
+            updateVisualization();
+        }
+
+        // Utility functions
+        function showLoading() {
+            loadingMessage.style.display = 'flex';
+            errorMessage.style.display = 'none';
+            mainContent.style.display = 'none';
+        }
+
+        function hideLoading() {
+            loadingMessage.style.display = 'none';
+            mainContent.style.display = 'block';
+        }
+
+        function showError(message) {
+            loadingMessage.style.display = 'none';
+            errorMessage.style.display = 'block';
+            errorMessage.textContent = message;
+            mainContent.style.display = 'none';
+        }
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

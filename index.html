@@ -313,6 +313,7 @@
         .slider-container {
             display: flex;
             align-items: center;
+            width: 100%;
         }
         
         .slider-value {
@@ -329,6 +330,62 @@
         input[type="range"] {
             width: 100%;
             margin: 0;
+            height: 8px;
+            background: var(--gray-200);
+            border-radius: 4px;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: none;
+        }
+
+        /* Radio button styles for positional encoding selection */
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .radio-label {
+            display: flex;
+            align-items: center;
+            font-weight: 500;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+        
+        .radio-label input {
+            margin-right: 0.5rem;
+        }
+        
+        .radio-label span {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background-color: var(--gray-100);
+            border-radius: 0.25rem;
+            transition: background-color 0.2s;
+        }
+        
+        .radio-label input:checked + span {
+            background-color: var(--primary-light);
+            color: white;
         }
         
         @media (max-width: 768px) {
@@ -351,6 +408,25 @@
     <div id="mainContent" style="display: none;">
         <div class="section">
             <h2>Controls</h2>
+            <!-- Positional Encoding Selection -->
+            <div class="control-group">
+                <label>Positional Encoding Type</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="positionalEncoding" value="word" checked>
+                        <span>Word Distance</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="positionalEncoding" value="syntactic_directed">
+                        <span>Directed Syntactic Distance</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="positionalEncoding" value="syntactic_undirected">
+                        <span>Undirected Syntactic Distance</span>
+                    </label>
+                </div>
+            </div>
+            
             <div class="control-row">
                 <div class="control-group">
                     <label for="taskSelect">Task (Story)</label>
@@ -389,14 +465,20 @@
                     <div id="currentWord" class="current-word"></div>
                 </div>
             </div>
+            
+            <!-- Word Selection Slider -->
+            <div class="control-group">
+                <label for="wordSlider">Word Selection Slider</label>
+                <div class="slider-container">
+                    <input type="range" id="wordSlider" min="0" max="0" step="1" value="0">
+                </div>
+            </div>
         </div>
 
         <!-- Attention Data Warning -->
         <div id="attentionWarning" class="warning" style="display: none;">
             <strong>Note:</strong> Limited attention data available for this task. The visualization may show simplified patterns.
         </div>
-
-
 
         <!-- Attention Curve Visualization -->
         <div class="section">
@@ -434,6 +516,9 @@
                 <li>The attention is causal, meaning words can only attend to previous words or themselves</li>
                 <li>The bar chart shows how the current word attends to all previous words in the sequence</li>
                 <li>Hover over elements to see more details</li>
+                <li>Word Distance data is shown from the <code>visualization_data_word/</code> directory</li>
+                <li>Directed Syntactic Distance data is shown from the <code>visualization_data_syntactic_directed/</code> directory</li>
+                <li>Undirected Syntactic Distance data is shown from the <code>visualization_data_syntactic_undirected/</code> directory</li>
             </ul>
         </div>
     </div>
@@ -449,6 +534,7 @@
         let currentHead = 'avg';
         let attentionThreshold = 0.1;
         let taskToFoldMapping = {}; // Maps task IDs to fold names
+        let currentPositionalEncoding = 'word'; // Default to word distance encoding
 
         // DOM elements
         const loadingMessage = document.getElementById('loadingMessage');
@@ -463,18 +549,22 @@
         const attentionWarning = document.getElementById('attentionWarning');
         const attentionThresholdSlider = document.getElementById('attentionThreshold');
         const thresholdValueDisplay = document.getElementById('thresholdValue');
-        const zoomLevelSlider = document.getElementById('zoomLevel');
-        const zoomValueDisplay = document.getElementById('zoomValue');
         const attentionCurve = document.getElementById('attentionCurve');
         const xAxisLabels = document.getElementById('xAxisLabels');
         const heatmap = document.getElementById('heatmap');
         const heatmapZoom = document.getElementById('heatmapZoom');
-        const contextWords = document.getElementById('contextWords');
         const curveDescription = document.getElementById('curveDescription');
+        const wordSlider = document.getElementById('wordSlider');
+        const positionalEncodingRadios = document.querySelectorAll('input[name="positionalEncoding"]');
 
         // Initialize the application
         async function init() {
             try {
+                // Set up positional encoding change event
+                for (const radio of positionalEncodingRadios) {
+                    radio.addEventListener('change', handlePositionalEncodingChange);
+                }
+                
                 await loadAvailableData();
                 setupUI();
                 updateVisualization();
@@ -491,14 +581,29 @@
             });
         }
 
+        // Get the base directory for data based on current positional encoding
+        function getDataDirectory() {
+            switch (currentPositionalEncoding) {
+                case 'syntactic_directed':
+                    return 'visualization_data_syntactic_directed';
+                case 'syntactic_undirected':
+                    return 'visualization_data_syntactic_undirected';
+                case 'word':
+                default:
+                    return 'visualization_data_word';
+            }
+        }
+
         // Load available data files
         async function loadAvailableData() {
             try {
                 showLoading();
                 
+                const dataDir = getDataDirectory();
+                
                 // Try to load the index file first
                 try {
-                    const response = await fetch('visualization_data/attention_data_index.json');
+                    const response = await fetch(`${dataDir}/attention_data_index.json`);
                     if (response.ok) {
                         const indexData = await response.json();
                         if (indexData.folds && indexData.folds.length > 0) {
@@ -512,12 +617,12 @@
                     }
                 } catch (indexError) {
                     // If index file not found, try finding fold files directly
-                    const folderResponse = await fetch('visualization_data/fold_0_attention.json');
+                    const folderResponse = await fetch(`${dataDir}/fold_0_attention.json`);
                     if (folderResponse.ok) {
                         availableFolds = ['fold_0', 'fold_1', 'fold_2', 'fold_3'];
                         currentFold = 'fold_0';
                     } else {
-                        throw new Error("No visualization data files found");
+                        throw new Error(`No visualization data files found in ${dataDir}`);
                     }
                 }
                 
@@ -545,7 +650,8 @@
         async function loadFoldData(fold) {
             try {
                 showLoading();
-                const filePath = `visualization_data/${fold}_attention.json`;
+                const dataDir = getDataDirectory();
+                const filePath = `${dataDir}/${fold}_attention.json`;
                 
                 const response = await fetch(filePath);
                 if (!response.ok) {
@@ -599,6 +705,7 @@
             prevButton.addEventListener('click', handlePrevSample);
             nextButton.addEventListener('click', handleNextSample);
             attentionThresholdSlider.addEventListener('input', handleThresholdChange);
+            wordSlider.addEventListener('input', handleWordSliderChange);
             
             // Initialize slider displays
             thresholdValueDisplay.textContent = attentionThreshold.toFixed(2);
@@ -674,6 +781,10 @@
             
             prevButton.disabled = currentSampleIndex <= 0;
             nextButton.disabled = currentSampleIndex >= samplesForTask.length - 1;
+            
+            // Update word slider
+            wordSlider.max = samplesForTask.length - 1;
+            wordSlider.value = currentSampleIndex;
         }
 
         // Display warning if attention data is limited
@@ -960,6 +1071,28 @@
         }
 
         // Event Handlers
+        function handlePositionalEncodingChange(e) {
+            const newPositionalEncoding = e.target.value;
+            
+            if (newPositionalEncoding !== currentPositionalEncoding) {
+                currentPositionalEncoding = newPositionalEncoding;
+                
+                // Reset state
+                currentSampleIndex = 0;
+                
+                // Reload data with the new positional encoding
+                loadAvailableData()
+                    .then(() => {
+                        // Update UI with the new data
+                        setupUI();
+                        updateVisualization();
+                    })
+                    .catch(error => {
+                        showError(`Error loading data for ${currentPositionalEncoding} encoding: ${error.message}`);
+                    });
+            }
+        }
+
         function handleTaskChange(e) {
             const newTaskId = Number(e.target.value);
             
@@ -1012,6 +1145,14 @@
             attentionThreshold = parseFloat(e.target.value);
             thresholdValueDisplay.textContent = attentionThreshold.toFixed(2);
             updateVisualization();
+        }
+
+        function handleWordSliderChange(e) {
+            const newIndex = parseInt(e.target.value);
+            if (newIndex !== currentSampleIndex) {
+                currentSampleIndex = newIndex;
+                updateVisualization();
+            }
         }
 
         // Utility functions
